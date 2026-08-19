@@ -157,8 +157,13 @@ def _inventory(args) -> int:
         return 2
 
     targets = _targets_from_spine(Path(args.spine))
+    listing = Path(args.listing)
+    spine = pd.read_parquet(args.spine)
+    terminated = set(spine.loc[spine["terminated_flag"], "appraisal_id"])
     report = inventory.build_report(
-        targets, crawl_mod.read_manifest(manifest_path), root
+        targets, crawl_mod.read_manifest(manifest_path), root,
+        listing_path=listing if listing.exists() else None,
+        terminated_ids=terminated,
     )
     written = inventory.write_reports(report, Path(args.results))
     for path in written:
@@ -210,6 +215,9 @@ def main(argv=None) -> int:
     i.add_argument("--spine", default=str(DEFAULT_PROCESSED / f"{STEM}.parquet"))
     i.add_argument("--cache", default=str(DEFAULT_GUIDANCE_CACHE))
     i.add_argument("--results", default=str(DEFAULT_RESULTS))
+    i.add_argument("--listing",
+                   default="data/raw/ta-published-listing_2026-08-19.json",
+                   help="Lap 0's cached published listing, for the cross-check")
     i.set_defaults(func=_inventory)
 
     args = ap.parse_args(argv)

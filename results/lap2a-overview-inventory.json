@@ -1,0 +1,574 @@
+{
+  "totals": {
+    "appraisals_in_spine": 1181,
+    "cached_and_parsed": 1181,
+    "failed": 0,
+    "missing": 0,
+    "redirected": 0
+  },
+  "chapters": {
+    "total": 4717,
+    "appraisals_with_chapters": 921,
+    "appraisals_with_no_chapters": 260,
+    "mean_per_appraisal_where_present": 5.12,
+    "count_distribution": {
+      "0": 260,
+      "1": 147,
+      "2": 1,
+      "3": 1,
+      "4": 76,
+      "5": 376,
+      "6": 113,
+      "7": 76,
+      "8": 56,
+      "9": 46,
+      "10": 14,
+      "11": 11,
+      "12": 4
+    },
+    "count_distribution_by_era": {
+      "TA1-200": {
+        "0": 111,
+        "1": 1,
+        "3": 1,
+        "5": 1,
+        "6": 4,
+        "7": 7,
+        "8": 18,
+        "9": 28,
+        "10": 14,
+        "11": 11,
+        "12": 4
+      },
+      "TA201-500": {
+        "0": 72,
+        "1": 24,
+        "2": 1,
+        "4": 4,
+        "5": 23,
+        "6": 54,
+        "7": 66,
+        "8": 38,
+        "9": 18
+      },
+      "TA501-800": {
+        "0": 60,
+        "1": 43,
+        "4": 15,
+        "5": 146,
+        "6": 34,
+        "7": 2
+      },
+      "TA801-1181": {
+        "0": 17,
+        "1": 79,
+        "4": 57,
+        "5": 206,
+        "6": 21,
+        "7": 1
+      }
+    },
+    "titles_top": [
+      [
+        "1 Recommendations",
+        718
+      ],
+      [
+        "3 Committee discussion",
+        473
+      ],
+      [
+        "4 Implementation",
+        435
+      ],
+      [
+        "5 Appraisal committee members and NICE project team",
+        241
+      ],
+      [
+        "5 Implementation",
+        209
+      ],
+      [
+        "5 Evaluation committee members and NICE project team",
+        173
+      ],
+      [
+        "2 The technology",
+        166
+      ],
+      [
+        "Advice",
+        149
+      ],
+      [
+        "Update information",
+        141
+      ],
+      [
+        "4 Consideration of the evidence",
+        109
+      ],
+      [
+        "2 Clinical need and practice",
+        80
+      ],
+      [
+        "7 Sources of evidence considered by the Committee",
+        78
+      ],
+      [
+        "3 The manufacturer's submission",
+        75
+      ],
+      [
+        "4 Evidence and interpretation",
+        70
+      ],
+      [
+        "4 Committee discussion",
+        65
+      ],
+      [
+        "3 Evidence",
+        63
+      ],
+      [
+        "6 Appraisal committee members and NICE project team",
+        63
+      ],
+      [
+        "6 Recommendations for further research",
+        61
+      ],
+      [
+        "8 Sources of evidence considered by the Committee",
+        59
+      ],
+      [
+        "1 Recommendation",
+        51
+      ],
+      [
+        "4 Evaluation committee members and NICE project team",
+        50
+      ],
+      [
+        "3 Implementation",
+        44
+      ],
+      [
+        "6 Appraisal Committee members and NICE project team",
+        43
+      ],
+      [
+        "3 The technologies",
+        40
+      ],
+      [
+        "7 Appraisal Committee members and NICE project team",
+        38
+      ],
+      [
+        "3 The technology",
+        35
+      ],
+      [
+        "3 The company's submission",
+        33
+      ],
+      [
+        "6 Appraisal Committee members, guideline representatives and NICE project team",
+        30
+      ],
+      [
+        "5 Recommendations for further research",
+        29
+      ],
+      [
+        "4 Appraisal committee members and NICE project team",
+        27
+      ],
+      [
+        "2 Information about pembrolizumab",
+        21
+      ],
+      [
+        "6 Update information",
+        19
+      ],
+      [
+        "7 Implementation and audit",
+        17
+      ],
+      [
+        "6 Implications for the NHS",
+        17
+      ],
+      [
+        "9 Sources of evidence considered by the Committee",
+        14
+      ],
+      [
+        "7 Sources of evidence considered by the committee",
+        14
+      ],
+      [
+        "7 Appraisal Committee members, guideline representatives and NICE project team",
+        14
+      ],
+      [
+        "8 Appraisal Committee members and NICE project team",
+        13
+      ],
+      [
+        "7 Appraisal committee members and NICE project team",
+        12
+      ],
+      [
+        "6 Appraisal committee members, guideline representatives and NICE project team",
+        12
+      ]
+    ],
+    "distinct_titles": 492,
+    "slugs_top": [
+      [
+        "Recommendations",
+        718
+      ],
+      [
+        "Implementation",
+        696
+      ],
+      [
+        "Committee-discussion",
+        538
+      ],
+      [
+        "Appraisal-committee-members-and-NICE-project-team",
+        344
+      ],
+      [
+        "Evaluation-committee-members-and-NICE-project-team",
+        227
+      ],
+      [
+        "The-technology",
+        201
+      ],
+      [
+        "Update-information",
+        175
+      ],
+      [
+        "Sources-of-evidence-considered-by-the-Committee",
+        159
+      ],
+      [
+        "Advice",
+        149
+      ],
+      [
+        "Appraisal-Committee-members-and-NICE-project-team",
+        117
+      ],
+      [
+        "Consideration-of-the-evidence",
+        109
+      ],
+      [
+        "Recommendations-for-further-research",
+        91
+      ],
+      [
+        "Clinical-need-and-practice",
+        80
+      ],
+      [
+        "The-manufacturers-submission",
+        75
+      ],
+      [
+        "Evidence-and-interpretation",
+        70
+      ],
+      [
+        "Evidence",
+        69
+      ],
+      [
+        "Recommendation",
+        51
+      ],
+      [
+        "The-technologies",
+        50
+      ],
+      [
+        "Appraisal-Committee-members-guideline-representatives-and-NICE-project-team",
+        48
+      ],
+      [
+        "The-companys-submission",
+        33
+      ],
+      [
+        "Sources-of-evidence-considered-by-the-committee",
+        27
+      ],
+      [
+        "Implications-for-the-NHS",
+        23
+      ],
+      [
+        "Information-about-pembrolizumab",
+        21
+      ],
+      [
+        "Implementation-and-audit",
+        19
+      ],
+      [
+        "Recommendations-for-research",
+        17
+      ],
+      [
+        "Appraisal-committee-members-guideline-representatives-and-NICE-project-team",
+        15
+      ],
+      [
+        "Information-about-nivolumab",
+        11
+      ],
+      [
+        "Appraisal-committee-members",
+        10
+      ],
+      [
+        "Information-about-upadacitinib",
+        7
+      ],
+      [
+        "Information-about-atezolizumab",
+        6
+      ]
+    ],
+    "distinct_slugs": 442
+  },
+  "route": {
+    "marker_hits": {
+      "multiple_technology": 2,
+      "highly_specialised": 2
+    },
+    "distinct_metadata_shapes": [
+      [
+        "Technology appraisal guidance | Reference number: <ref> | Published: <date>",
+        938
+      ],
+      [
+        "Technology appraisal | Reference number: <ref> | Published: <date>",
+        168
+      ],
+      [
+        "Technology appraisal guidance | Reference number: <ref> | Published: <date> | Last updated: <date>",
+        73
+      ],
+      [
+        "Technology appraisal | Reference number: <ref> | Published: <date> | Last updated: <date>",
+        2
+      ]
+    ],
+    "product_labels": {
+      "Technology appraisal guidance": 1011,
+      "Technology appraisal": 170
+    }
+  },
+  "terminated_signals": {
+    "short_product_label": {
+      "n": 170,
+      "examples": [
+        "TA1006",
+        "TA1024",
+        "TA1028",
+        "TA1029",
+        "TA1032"
+      ],
+      "precision": 1.0,
+      "recall": 0.977,
+      "false_positives": [],
+      "missed": [
+        "TA1141",
+        "TA147",
+        "TA150",
+        "TA175"
+      ]
+    },
+    "advice_chapter": {
+      "n": 149,
+      "examples": [
+        "TA1006",
+        "TA1024",
+        "TA1028",
+        "TA1029",
+        "TA1032"
+      ],
+      "precision": 1.0,
+      "recall": 0.8563,
+      "false_positives": [],
+      "missed": [
+        "TA147",
+        "TA150",
+        "TA175",
+        "TA194",
+        "TA224",
+        "TA262",
+        "TA281",
+        "TA328",
+        "TA356",
+        "TA361"
+      ]
+    },
+    "scored": true,
+    "terminated_appraisals_in_spine": 174
+  },
+  "dates": {
+    "with_published_date": 1181,
+    "without_published_date": 0,
+    "earliest": "2000-03-27",
+    "latest": "2026-07-30",
+    "date_label_shapes": [
+      [
+        "Published: <date>",
+        1106
+      ],
+      [
+        "Published: <date> | Last updated: <date>",
+        75
+      ]
+    ]
+  },
+  "supersession": {
+    "stub_pages_no_chapters": 260,
+    "stub_naming_superseding_guidance": 192,
+    "stub_with_supersession_sentence": 254,
+    "stub_with_withdrawal_language": 31,
+    "stub_with_neither": [],
+    "withdrawn_not_superseded": [
+      "TA008",
+      "TA065",
+      "TA084",
+      "TA097",
+      "TA113",
+      "TA144",
+      "TA202",
+      "TA232",
+      "TA246",
+      "TA252",
+      "TA253",
+      "TA291",
+      "TA297",
+      "TA318",
+      "TA331",
+      "TA332",
+      "TA344",
+      "TA361",
+      "TA364",
+      "TA441",
+      "TA465",
+      "TA470",
+      "TA471",
+      "TA506",
+      "TA597",
+      "TA622",
+      "TA743",
+      "TA769",
+      "TA855",
+      "TA981",
+      "TA985"
+    ],
+    "live_pages_mentioning_an_update": [
+      "TA061",
+      "TA086",
+      "TA139",
+      "TA566"
+    ],
+    "superseding_reference_prefixes": {
+      "TA": 149,
+      "CG": 24,
+      "NG": 19,
+      "PH": 1
+    },
+    "examples": [
+      {
+        "appraisal_id": "TA002",
+        "superseded_by": "TA304",
+        "url": "http://www.nice.org.uk/guidance/ta304"
+      },
+      {
+        "appraisal_id": "TA003",
+        "superseded_by": "TA55",
+        "url": "http://www.nice.org.uk/guidance/ta55"
+      },
+      {
+        "appraisal_id": "TA004",
+        "superseded_by": "TA71",
+        "url": "http://www.nice.org.uk/guidance/ta71"
+      },
+      {
+        "appraisal_id": "TA005",
+        "superseded_by": "TA69",
+        "url": "http://www.nice.org.uk/guidance/ta69"
+      },
+      {
+        "appraisal_id": "TA006",
+        "superseded_by": "CG81",
+        "url": "http://www.nice.org.uk/guidance/cg81"
+      },
+      {
+        "appraisal_id": "TA007",
+        "superseded_by": "CG184",
+        "url": "http://www.nice.org.uk/guidance/cg184"
+      },
+      {
+        "appraisal_id": "TA009",
+        "superseded_by": "TA63",
+        "url": "http://www.nice.org.uk/guidance/ta63"
+      },
+      {
+        "appraisal_id": "TA010",
+        "superseded_by": "NG245",
+        "url": "https://www.nice.org.uk/guidance/ng245"
+      }
+    ]
+  },
+  "listing_cross_check": {
+    "listing_appraisals": 925,
+    "in_spine_not_in_listing": 260,
+    "chapterless_stub_pages": 260,
+    "sets_are_identical": true,
+    "in_gap_but_has_chapters": [],
+    "chapterless_but_listed": []
+  },
+  "failures": {
+    "failed": [],
+    "missing": [],
+    "redirects": []
+  },
+  "lap2b": {
+    "chapter_requests_if_all": 4717,
+    "hours_at_2s": 2.62,
+    "narrow_target": {
+      "slugs": {
+        "Recommendations": 718,
+        "Recommendation": 51,
+        "Committee-discussion": 538,
+        "Consideration-of-the-evidence": 109,
+        "Evidence-and-interpretation": 70,
+        "Advice": 149
+      },
+      "requests": 1635,
+      "hours_at_2s": 0.91,
+      "hours_at_measured_rate": 1.33
+    }
+  }
+}

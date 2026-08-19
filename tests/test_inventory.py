@@ -147,3 +147,74 @@ def test_markdown_report_answers_all_five_questions(tmp_path):
     for heading in ["chapter inventory", "route", "publication date",
                     "Supersession", "failed"]:
         assert heading.lower() in md.lower()
+
+
+# --- statuses the pages distinguish and a naive detector would not ---------
+
+def test_withdrawal_is_detected_separately_from_supersession():
+    """A withdrawn appraisal has no superseding guidance to point at."""
+    p = inventory.parse_overview(page(
+        extra="<p>NICE has withdrawn this guidance. Pfizer has withdrawn the product.</p>"))
+    assert p["withdrawn"] is True
+    assert p["superseding"] == []
+
+
+def test_a_page_linking_to_itself_is_not_superseded_by_itself():
+    """The template links the page's own reference in its nav."""
+    p = inventory.parse_overview(page(ref="TA61", extra=(
+        '<p>Recommendation 1.5 has been replaced.</p>'
+        '<a href="/guidance/ta61">Guidance</a>')))
+    assert p["superseded"] is True          # the sentence is there
+    assert p["superseding"] == []           # but nothing else supersedes it
+
+
+def test_a_partially_updated_live_page_keeps_its_chapters():
+    p = inventory.parse_overview(page(
+        chapters=[("1-R", "1 Recommendations")],
+        extra="<p>Recommendation 1.5 has been replaced.</p>"))
+    assert p["chapter_count"] == 1 and p["superseded"] is True
+
+
+def test_terminated_signals_are_scored_not_asserted(tmp_path):
+    """A signal nobody scored against the spine is a guess."""
+    (tmp_path / "ta1.html").write_text(
+        page(ref="TA1", chapters=[("Advice", "Advice")]).replace(
+            "Technology appraisal guidance", "Technology appraisal"))
+    (tmp_path / "ta2.html").write_text(page(ref="TA2", chapters=[("1-R", "1 Recommendations")]))
+
+    manifest = {"TA001": FakeRecord(str(tmp_path / "ta1.html")),
+                "TA002": FakeRecord(str(tmp_path / "ta2.html"))}
+    report = inventory.build_report(
+        [("TA001", "u1"), ("TA002", "u2")], manifest, tmp_path,
+        terminated_ids={"TA001"},
+    )
+    t = report["terminated_signals"]
+    assert t["scored"] is True
+    assert t["short_product_label"]["precision"] == 1.0
+    assert t["advice_chapter"]["precision"] == 1.0
+    assert t["short_product_label"]["recall"] == 1.0
+
+
+def test_terminated_signals_report_their_own_false_positives(tmp_path):
+    (tmp_path / "ta1.html").write_text(
+        page(ref="TA1").replace("Technology appraisal guidance", "Technology appraisal"))
+    manifest = {"TA001": FakeRecord(str(tmp_path / "ta1.html"))}
+    report = inventory.build_report([("TA001", "u1")], manifest, tmp_path, terminated_ids=set())
+    assert report["terminated_signals"]["short_product_label"]["false_positives"] == ["TA001"]
+
+
+def test_the_listing_cross_check_reports_disagreement_rather_than_hiding_it(tmp_path):
+    import json as _json
+    (tmp_path / "ta1.html").write_text(page(ref="TA1"))                       # no chapters
+    (tmp_path / "ta2.html").write_text(page(ref="TA2", chapters=[("1-R", "1 R")]))
+    listing = tmp_path / "listing.json"
+    listing.write_text(_json.dumps({"documents": [{"id": "ta1"}, {"id": "ta2"}]}))
+
+    manifest = {"TA001": FakeRecord(str(tmp_path / "ta1.html")),
+                "TA002": FakeRecord(str(tmp_path / "ta2.html"))}
+    report = inventory.build_report([("TA001", "u1"), ("TA002", "u2")], manifest, tmp_path,
+                                    listing_path=listing)
+    x = report["listing_cross_check"]
+    assert x["listing_appraisals"] == 2
+    assert x["sets_are_identical"] is False        # TA1 is chapterless but listed
+    assert x["chapterless_but_listed"] == ["TA1"]

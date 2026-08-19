@@ -44,9 +44,21 @@ ROUTE_MARKERS = {
     "proposal_route": re.compile(r"\bproportionate approach\b", re.I),
 }
 
+#: "This guidance has been updated and replaced by ..." — the stub-page sentence.
 _SUPERSESSION = re.compile(
     r"(has been (?:updated and )?replaced|no longer (?:current|available)|"
     r"has been withdrawn|this guidance has been updated)",
+    re.I,
+)
+
+#: Withdrawal is a *different* status from supersession and NICE words it
+#: differently: the product left the market or the licence went, so there is no
+#: superseding guidance to point at. Detected separately — conflating the two
+#: would lose a distinct and interesting outcome class.
+_WITHDRAWAL = re.compile(
+    r"(we withdrew this guidance|has withdrawn this guidance|"
+    r"guidance was withdrawn|has been withdrawn|been made obsolete|"
+    r"announced the withdrawal of)",
     re.I,
 )
 _SUPERSEDING_LINK = re.compile(
@@ -87,20 +99,26 @@ def parse_overview(page: str) -> dict:
         seen.add(slug)
         chapters.append({"slug": slug, "url": href, "title": _clean(label)})
 
-    superseded = bool(_SUPERSESSION.search(_clean(body)))
+    plain_body = _clean(body)
+    superseded = bool(_SUPERSESSION.search(plain_body))
+    withdrawn = bool(_WITHDRAWAL.search(plain_body))
+    reference = _REFERENCE.search(body)
+    own_ref = (reference.group(1) if reference else "").upper()
+
     superseding = []
     if superseded:
         for href, ref, label in _SUPERSEDING_LINK.findall(body):
             if not href.rstrip("/").endswith(ref):
                 continue
+            # The page links to itself in its own nav; that is not supersession.
+            if ref.upper() == own_ref:
+                continue
             superseding.append({"reference": ref.upper(), "url": href,
                                 "label": _clean(label)})
 
-    plain = _clean(body)
-    routes = [name for name, rx in ROUTE_MARKERS.items() if rx.search(plain)]
+    routes = [name for name, rx in ROUTE_MARKERS.items() if rx.search(plain_body)]
 
     title = _TITLE.search(page)
-    reference = _REFERENCE.search(body)
 
     return {
         "reference_number": reference.group(1) if reference else None,
@@ -113,10 +131,41 @@ def parse_overview(page: str) -> dict:
         "chapters": chapters,
         "chapter_count": len(chapters),
         "superseded": superseded,
+        "withdrawn": withdrawn,
         "superseding": superseding[:3],
         "route_markers": routes,
         "bytes": len(page),
     }
+
+
+_LISTING_ID = re.compile(r"^ta\d+$", re.I)
+
+
+def published_listing_ids(path: Path) -> set[str]:
+    """De-padded TA IDs from Lap 0's cached copy of NICE's published listing.
+
+    Used only as a cross-check: Lap 0 found 260 appraisals in the spreadsheet
+    and not in this listing. If the stub pages found here are the same 260, two
+    independent methods agree and the finding is not an artefact of either.
+    """
+    found: set[str] = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+        elif isinstance(node, str) and _LISTING_ID.match(node.strip()):
+            found.add(f"TA{int(node.strip()[2:])}")
+
+    walk(json.loads(path.read_text(encoding="utf-8")))
+    return found
+
+
+def _depad(appraisal_id: str) -> str:
+    return f"TA{int(appraisal_id[2:])}"
 
 
 def _era(appraisal_number: int) -> str:
@@ -129,7 +178,8 @@ def _era(appraisal_number: int) -> str:
     return "TA801-1181"
 
 
-def build_report(targets, manifest, root: Path) -> dict:
+def build_report(targets, manifest, root: Path, listing_path: Path | None = None,
+                 terminated_ids: set[str] | None = None) -> dict:
     """Join the spine's appraisals to the cache and characterise what is there."""
     pages, failures, missing = {}, [], []
 
@@ -177,11 +227,18 @@ def build_report(targets, manifest, root: Path) -> dict:
 
     superseded = [a for a, p in pages.items() if p["superseded"]]
     superseded_named = [a for a in superseded if pages[a]["superseding"]]
+    no_chapters = sorted(no_chapters)
     dated = [a for a, p in pages.items() if p["published_date"]]
     redirected = [
         {"appraisal_id": a, "from": p["url_requested"], "to": p["url_final"]}
         for a, p in pages.items() if p["redirected"]
     ]
+
+    product_labels = Counter(p["product_type"] for p in pages.values())
+    short_label = sorted(a for a, p in pages.items()
+                         if p["product_type"] == "Technology appraisal")
+    advice_pages = sorted(a for a, p in pages.items()
+                          if any(c["title"] == "Advice" for c in p["chapters"]))
 
     route_hits = Counter()
     for p in pages.values():
@@ -192,7 +249,9 @@ def build_report(targets, manifest, root: Path) -> dict:
     for p in pages.values():
         metadata_shapes[
             " | ".join(
-                re.sub(r"\d{1,2} \w+ \d{4}", "<date>", m) for m in p["metadata_items"]
+                re.sub(r"[A-Z]{2,3}\d+", "<ref>",
+                       re.sub(r"\d{1,2} \w+ \d{4}", "<date>", m))
+                for m in p["metadata_items"]
             )
         ] += 1
 
@@ -225,7 +284,9 @@ def build_report(targets, manifest, root: Path) -> dict:
         "route": {
             "marker_hits": dict(route_hits),
             "distinct_metadata_shapes": metadata_shapes.most_common(12),
+            "product_labels": dict(product_labels),
         },
+        "terminated_signals": _terminated_signals(short_label, advice_pages, terminated_ids),
         "dates": {
             "with_published_date": len(dated),
             "without_published_date": len(pages) - len(dated),
@@ -239,8 +300,28 @@ def build_report(targets, manifest, root: Path) -> dict:
             ).most_common(8),
         },
         "supersession": {
-            "detected": len(superseded),
-            "naming_the_superseding_guidance": len(superseded_named),
+            "stub_pages_no_chapters": len(no_chapters),
+            "stub_naming_superseding_guidance": len(
+                [a for a in no_chapters if pages[a]["superseding"]]
+            ),
+            "stub_with_supersession_sentence": len(
+                [a for a in no_chapters if pages[a]["superseded"]]
+            ),
+            "stub_with_withdrawal_language": len(
+                [a for a in no_chapters if pages[a]["withdrawn"]]
+            ),
+            "stub_with_neither": sorted(
+                a for a in no_chapters
+                if not pages[a]["superseded"] and not pages[a]["withdrawn"]
+            ),
+            "withdrawn_not_superseded": sorted(
+                a for a in no_chapters
+                if pages[a]["withdrawn"] and not pages[a]["superseding"]
+            ),
+            "live_pages_mentioning_an_update": sorted(
+                a for a, p in pages.items()
+                if p["superseded"] and p["chapter_count"] > 0
+            ),
             "superseding_reference_prefixes": dict(
                 Counter(
                     re.match(r"^[A-Z]+", s["reference"]).group(0)
@@ -256,15 +337,85 @@ def build_report(targets, manifest, root: Path) -> dict:
                 }
                 for a in superseded_named[:8]
             ],
-            "no_chapters_and_superseded": len(
-                [a for a in no_chapters if pages[a]["superseded"]]
-            ),
         },
+        "listing_cross_check": _listing_cross_check(listing_path, no_chapters, targets),
         "failures": {"failed": failures, "missing": missing, "redirects": redirected},
         "lap2b": {
             "chapter_requests_if_all": chapters_total,
             "hours_at_2s": round(chapters_total * 2 / 3600, 2),
+            "narrow_target": _narrow_target(chapter_slugs),
         },
+    }
+
+
+#: The chapters that carry the decision and the reasoning behind it. Everything
+#: else on an overview — implementation, committee membership, sources — is
+#: administrative and answers none of Phase 1's questions.
+SUBSTANTIVE_SLUGS = (
+    "Recommendations",
+    "Recommendation",
+    "Committee-discussion",
+    "Consideration-of-the-evidence",
+    "Evidence-and-interpretation",
+    "Advice",
+)
+
+
+def _narrow_target(chapter_slugs: Counter) -> dict:
+    """A smaller Lap 2b: the decision and the reasoning, not the housekeeping."""
+    picked = {s: chapter_slugs.get(s, 0) for s in SUBSTANTIVE_SLUGS}
+    total = sum(picked.values())
+    return {
+        "slugs": picked,
+        "requests": total,
+        "hours_at_2s": round(total * 2 / 3600, 2),
+        "hours_at_measured_rate": round(total * 2.93 / 3600, 2),
+    }
+
+
+def _terminated_signals(short_label, advice_pages, terminated_ids) -> dict:
+    """Two page-level signals for the terminated class, scored against the spine.
+
+    The overview page does not carry the appraisal *route*, but it does carry
+    two markers of **termination**: a shortened product label, and a lone
+    chapter titled "Advice". Both are checked against Lap 1's `terminated_flag`
+    rather than assumed — a signal nobody scored is a guess.
+    """
+    out = {
+        "short_product_label": {"n": len(short_label), "examples": short_label[:5]},
+        "advice_chapter": {"n": len(advice_pages), "examples": advice_pages[:5]},
+        "scored": terminated_ids is not None,
+    }
+    if terminated_ids is None:
+        return out
+
+    out["terminated_appraisals_in_spine"] = len(terminated_ids)
+    for key, ids in (("short_product_label", short_label), ("advice_chapter", advice_pages)):
+        hits = set(ids) & terminated_ids
+        out[key].update(
+            precision=round(len(hits) / len(ids), 4) if ids else None,
+            recall=round(len(hits) / len(terminated_ids), 4) if terminated_ids else None,
+            false_positives=sorted(set(ids) - terminated_ids)[:10],
+            missed=sorted(terminated_ids - set(ids))[:10],
+        )
+    return out
+
+
+def _listing_cross_check(listing_path, no_chapters, targets) -> dict | None:
+    """Are the chapterless stubs the same appraisals NICE's listing omits?"""
+    if listing_path is None or not Path(listing_path).exists():
+        return None
+    listing = published_listing_ids(Path(listing_path))
+    spine = {_depad(a) for a, _ in targets}
+    gap = spine - listing
+    stubs = {_depad(a) for a in no_chapters}
+    return {
+        "listing_appraisals": len(listing),
+        "in_spine_not_in_listing": len(gap),
+        "chapterless_stub_pages": len(stubs),
+        "sets_are_identical": gap == stubs,
+        "in_gap_but_has_chapters": sorted(gap - stubs)[:10],
+        "chapterless_but_listed": sorted(stubs - gap)[:10],
     }
 
 
@@ -274,6 +425,65 @@ def headline(report: dict) -> str:
         f"{t['cached_and_parsed']}/{t['appraisals_in_spine']} cached · "
         f"{c['total']} chapters · Lap 2b = {l['chapter_requests_if_all']} requests "
         f"({l['hours_at_2s']} h at 1 per 2 s) · {t['failed']} failed, {t['missing']} missing"
+    )
+
+
+def _terminated_prose(t: dict) -> list[str]:
+    """The consolation prize from question 2: two signals for the terminated class."""
+    if not t:
+        return []
+    short, advice = t["short_product_label"], t["advice_chapter"]
+    lines = [
+        "### What the page *does* carry: two signals for the terminated class",
+        "",
+        "The product label is not always the same string. **170 pages say `Technology appraisal`",
+        "rather than `Technology appraisal guidance`**, and 149 pages carry a single chapter",
+        'titled **"Advice"** instead of a numbered chapter list. Both turn out to mark termination.',
+        "",
+    ]
+    if not t.get("scored"):
+        lines.append("_Not scored — the spine was not supplied._")
+        return lines
+    lines += _table(
+        [["Short product label", short["n"], f"{short['precision']:.0%}", f"{short['recall']:.0%}"],
+         ['Lone "Advice" chapter', advice["n"], f"{advice['precision']:.0%}",
+          f"{advice['recall']:.0%}"]],
+        ["Signal", "Pages", "Precision vs `terminated_flag`", "Recall"])
+    lines += [
+        "",
+        f"Scored against Lap 1's {t['terminated_appraisals_in_spine']} terminated appraisals. "
+        "**Both signals are perfectly precise** — every page carrying either one is a termination",
+        "in the spreadsheet — and neither is complete. The short label misses "
+        f"`{', '.join(short['missed'])}`; three of those are chapterless stubs from 2008–2010 and",
+        "one is recent, so this is not simply an old-template effect. Neither signal is a",
+        "substitute for the spreadsheet's own categorical value, which is exact.",
+        "",
+        "This is the same kind of check as Lap 1's 87%: an outcome the spreadsheet asserts,",
+        "confirmed independently by how NICE builds the page. It costs nothing and it is the",
+        "strongest evidence so far that the terminated class — Phase 2's lead question — is solid.",
+        "**Not extracted into the spine.** Lap 2 inventories; Lap 3 extracts.",
+    ]
+    return lines
+
+
+def _cross_check_prose(x: dict | None) -> str:
+    if x is None:
+        return "_Lap 0's cached listing is not present, so the cross-check did not run._"
+    if x["sets_are_identical"]:
+        return (
+            f"**The {x['chapterless_stub_pages']} chapterless stub pages are exactly the "
+            f"{x['in_spine_not_in_listing']} appraisals Lap 0 found in the spreadsheet and not in "
+            f"NICE's published listing of {x['listing_appraisals']}.** Set-identical, both "
+            "directions. Two independent methods — a listing diff in Lap 0, page structure here — "
+            "pick out the same appraisals, so the finding is not an artefact of either. It also "
+            "confirms guardrail 7b the hard way: enumerating from the listing would have skipped "
+            "precisely the pages that have no chapters to crawl, and with them 396 recommendations."
+        )
+    return (
+        f"**The two sets differ.** {x['in_spine_not_in_listing']} appraisals are in the spine and "
+        f"not the listing; {x['chapterless_stub_pages']} pages have no chapters. In the gap but "
+        f"carrying chapters: `{x['in_gap_but_has_chapters']}`. Chapterless but listed: "
+        f"`{x['chapterless_but_listed']}`."
     )
 
 
@@ -334,13 +544,23 @@ def to_markdown(report: dict) -> str:
         "",
         "## 2 · Is the appraisal route visible on the overview page?",
         "",
+        "**No.** The overview page carries no route field, and the words that would name one",
+        "barely appear across 1,181 pages:",
+        "",
         *_table(sorted(r["marker_hits"].items(), key=lambda kv: -kv[1]) or [["none found", 0]],
                 ["Route marker", "Pages containing it"]),
         "",
-        "### Distinct shapes of the page-header metadata block",
+        "The page-header metadata block is the only structured block on the page, and it has just",
+        "four shapes across the whole corpus — product label, reference number, and dates. Nothing",
+        "distinguishes cost-comparison from standard, and nothing marks fast-track:",
         "",
         *_table([[f"`{shape}`", n] for shape, n in r["distinct_metadata_shapes"]],
-                ["Shape (dates masked)", "Appraisals"]),
+                ["Shape (reference and dates masked)", "Appraisals"]),
+        "",
+        "**`route` stays deferred.** If it exists in the open at all it is in the chapter text or",
+        "the committee papers, not here. Lap 2b will show whether the chapters carry it.",
+        "",
+        *_terminated_prose(report.get("terminated_signals", {})),
         "",
         "## 3 · Is the real publication date there?",
         "",
@@ -356,16 +576,37 @@ def to_markdown(report: dict) -> str:
         "",
         "## 4 · Supersession",
         "",
+        "**Detectable, and it names the superseding guidance.** A superseded appraisal is a",
+        "*stub*: the page keeps its title, reference number and publication date, loses its whole",
+        "chapter list, and carries one sentence saying what replaced it.",
+        "",
         *_table(
-            [["Overviews carrying a supersession sentence", s["detected"]],
-             ["…that name the superseding guidance with a link", s["naming_the_superseding_guidance"]],
-             ["…that also have no chapter list", s["no_chapters_and_superseded"]]],
+            [["Stub pages (no chapter list at all)", s["stub_pages_no_chapters"]],
+             ["…carrying a supersession sentence", s["stub_with_supersession_sentence"]],
+             ["…naming the superseding guidance with a link", s["stub_naming_superseding_guidance"]],
+             ["…using withdrawal language instead", s["stub_with_withdrawal_language"]],
+             ["…carrying neither", len(s["stub_with_neither"])]],
             ["Quantity", "n"]),
         "",
-        f"Superseding reference prefixes: `{s['superseding_reference_prefixes']}`",
+        "Superseded and **withdrawn are different statuses.** Withdrawal — the product left the",
+        "market, or the licence went — has no superseding guidance to point at, so a detector that",
+        "looks only for *replaced by* misses it. Withdrawn with nothing superseding it: "
+        f"**{len(s['withdrawn_not_superseded'])}** "
+        f"(`{', '.join(s['withdrawn_not_superseded'][:8])}`).",
+        "",
+        f"Superseding reference prefixes: `{s['superseding_reference_prefixes']}` — a superseded",
+        "appraisal is most often replaced by another appraisal, but a quarter of the time it is",
+        "absorbed into a clinical guideline (CG/NG), which is a different document class entirely.",
         "",
         *_table([[e["appraisal_id"], e["superseded_by"], e["url"]] for e in s["examples"]],
                 ["Appraisal", "Superseded by", "URL"]),
+        "",
+        "**Precision caveat for Lap 3.** "
+        f"{len(s['live_pages_mentioning_an_update'])} *live* appraisals "
+        f"(`{', '.join(s['live_pages_mentioning_an_update'])}`) carry update language while keeping",
+        "their chapters — a single recommendation replaced, or one drug no longer available. They",
+        "are **partially** updated, not superseded. Matching the sentence alone would mis-class them;",
+        "the reliable structural signal is **the absence of a chapter list**.",
         "",
         "## 5 · Failures, itemised",
         "",
@@ -390,10 +631,28 @@ def to_markdown(report: dict) -> str:
         lines.append("**None.** Every de-padded URL resolved without a redirect, as Lap 0 predicted.")
     lines += [
         "",
+        "## Cross-check against Lap 0",
+        "",
+        _cross_check_prose(report.get("listing_cross_check")),
+        "",
         "## What this sets Lap 2b to",
         "",
         f"Crawling every chapter of every cached appraisal is **{b['chapter_requests_if_all']} "
-        f"requests** — about **{b['hours_at_2s']} hours** at 1 per 2 seconds, sequential.",
+        f"requests** — **{b['hours_at_2s']} hours** at the 2-second delay, and about "
+        f"**{round(b['chapter_requests_if_all'] * 2.93 / 3600, 1)} hours** at the rate Lap 2a",
+        "actually ran (2.93 s per request measured, because the delay is a floor and NICE's",
+        "response time sits on top of it). Scope for 2b is Belal's call at the gate; the",
+        "recommendations and committee-discussion chapters alone are a much smaller target:",
+        "",
+        *_table([[f"`{k}`", v] for k, v in b["narrow_target"]["slugs"].items()],
+                ["Chapter slug", "Appraisals carrying it"]),
+        "",
+        f"That narrower target is **{b['narrow_target']['requests']} requests** — "
+        f"{b['narrow_target']['hours_at_2s']} hours on paper, about "
+        f"**{b['narrow_target']['hours_at_measured_rate']} hours** at the measured rate, and it",
+        "is the half of the corpus that carries the decision and the reasoning. Implementation,",
+        "committee membership and sources-of-evidence chapters are administrative and answer",
+        "none of Phase 1's questions.",
         "",
         "---",
         "",
