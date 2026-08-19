@@ -14,7 +14,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from hta import excel, reconcile
+import pandas as pd
+
+from hta import crawl as crawl_mod
+from hta import excel, inventory, reconcile
 from hta.spine import build_spine
 
 DEFAULT_RAW = Path("data/raw/ta-recommendations_2026-08-19.xlsx")
@@ -22,6 +25,24 @@ DEFAULT_CANCER = Path("data/raw/ta-cancer-recommendations_2026-08-19.xlsx")
 DEFAULT_PROCESSED = Path("data/processed")
 DEFAULT_RESULTS = Path("results")
 STEM = "nice_ta_recommendations_spine"
+DEFAULT_GUIDANCE_CACHE = Path("data/raw/guidance")
+MANIFEST_NAME = "manifest.jsonl"
+
+
+def _targets_from_spine(spine_path: Path) -> list[tuple[str, str]]:
+    """One (appraisal_id, url) per appraisal, from the Lap 1 spine.
+
+    The spine is the enumeration source — guardrail 7b. NICE's published
+    listing omits 260 live appraisals and omits them non-randomly.
+    """
+    spine = pd.read_parquet(spine_path)
+    pairs = (
+        spine[["appraisal_id", "appraisal_url"]]
+        .drop_duplicates()
+        .assign(_n=lambda d: d["appraisal_id"].str.slice(2).astype(int))
+        .sort_values("_n")
+    )
+    return list(zip(pairs["appraisal_id"], pairs["appraisal_url"]))
 
 
 def _build(args) -> int:
@@ -101,6 +122,51 @@ def _build(args) -> int:
     return 0
 
 
+def _crawl_overviews(args) -> int:
+    spine_path = Path(args.spine)
+    if not spine_path.exists():
+        print(f"error: {spine_path} not found — run `hta build` first.", file=sys.stderr)
+        return 2
+
+    targets = _targets_from_spine(spine_path)
+    root = Path(args.cache)
+    print(f"{len(targets)} appraisals enumerated from the spine", file=sys.stderr)
+
+    summary = crawl_mod.crawl(
+        targets,
+        root,
+        root / MANIFEST_NAME,
+        delay=args.delay,
+        limit=args.limit,
+        log=lambda m: print(m, file=sys.stderr),
+    )
+    print(
+        f"requested {summary['requested']}, ok {summary['ok']}, "
+        f"failed {summary['failed']}, already cached {summary['skipped']}",
+        file=sys.stderr,
+    )
+    return 0
+
+
+def _inventory(args) -> int:
+    root = Path(args.cache)
+    manifest_path = root / MANIFEST_NAME
+    if not manifest_path.exists():
+        print(f"error: {manifest_path} not found — run `crawl-overviews` first.",
+              file=sys.stderr)
+        return 2
+
+    targets = _targets_from_spine(Path(args.spine))
+    report = inventory.build_report(
+        targets, crawl_mod.read_manifest(manifest_path), root
+    )
+    written = inventory.write_reports(report, Path(args.results))
+    for path in written:
+        print(f"wrote {path}", file=sys.stderr)
+    print(inventory.headline(report), file=sys.stderr)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="hta",
@@ -124,6 +190,27 @@ def main(argv=None) -> int:
         help="write the outputs even if the reconciliation fails (diagnostics only)",
     )
     b.set_defaults(func=_build)
+
+    c = sub.add_parser(
+        "crawl-overviews",
+        help="Lap 2a: cache /guidance/taXXXX for every appraisal in the spine",
+    )
+    c.add_argument("--spine", default=str(DEFAULT_PROCESSED / f"{STEM}.parquet"))
+    c.add_argument("--cache", default=str(DEFAULT_GUIDANCE_CACHE))
+    c.add_argument("--delay", type=float, default=crawl_mod.DELAY_SECONDS,
+                   help="seconds between requests (default 2.0 — twice robots.txt)")
+    c.add_argument("--limit", type=int, default=None,
+                   help="stop after N requests (for a smoke test, not for the real run)")
+    c.set_defaults(func=_crawl_overviews)
+
+    i = sub.add_parser(
+        "inventory",
+        help="Lap 2a: read the cache (never the network) and write the report",
+    )
+    i.add_argument("--spine", default=str(DEFAULT_PROCESSED / f"{STEM}.parquet"))
+    i.add_argument("--cache", default=str(DEFAULT_GUIDANCE_CACHE))
+    i.add_argument("--results", default=str(DEFAULT_RESULTS))
+    i.set_defaults(func=_inventory)
 
     args = ap.parse_args(argv)
     return args.func(args)

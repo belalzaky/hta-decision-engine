@@ -6,9 +6,10 @@ A public, reproducible dataset and model of every **NICE technology appraisal** 
 submitted, what the evidence review group objected to, and what actually predicts whether a
 medicine is recommended, restricted or rejected.
 
-**This repository is currently at Lap 1: the spine.** One tidy table, one row per
-recommendation, rebuilt offline from NICE's own published spreadsheet with every count
-reconciled and the normalisation checked against a figure NICE publishes itself.
+**Current state: Lap 1 (the spine) and Lap 2a (the overview-page cache) are done.** One tidy
+table, one row per recommendation, rebuilt offline from NICE's own published spreadsheet with
+every count reconciled and the normalisation checked against a figure NICE publishes itself —
+plus a polite, resume-safe cache of the guidance overview page for every appraisal in it.
 
 ## The table
 
@@ -88,6 +89,31 @@ docker run --rm -v "$PWD/data:/app/data" -v "$PWD/results:/app/results" \
   hta-decision-engine build
 ```
 
+## The crawler (Lap 2a)
+
+```bash
+caffeinate -i python -m hta.cli crawl-overviews   # ~40 minutes, resumable
+python -m hta.cli inventory                       # reads the cache, no network
+```
+
+Enumeration comes from the **spine**, never NICE's published listing — the listing omits 260
+live appraisals, non-randomly. The crawl rules are enforced in code and asserted in tests, not
+left to good intentions:
+
+- **1 request per 2 seconds, sequential, no concurrency** — double what `robots.txt` asks.
+- **`robots.txt` is re-read at the start of any run that will fetch**, and the run aborts if it
+  has tightened since Lap 0 read it. A run with a full cache makes **zero** requests, that one
+  included.
+- **A real identifying User-Agent** naming the project and a contact route.
+- **Resume-safe.** Killed at request 700, a restart continues at 701; what is on disk is never
+  re-fetched, and a file deleted from the cache is re-fetched even though the manifest has it.
+- **An empty 200 is a failure, not a page** — the run stops on the first one rather than caching
+  shells. Ten consecutive failures also stop it.
+- Every appraisal ends up **cached or recorded as failed with a reason**. No silent gaps.
+
+The cache and its manifest live under `data/raw/guidance/` and are never redistributed. The
+inventory it produced is in [`results/lap2a-overview-inventory.md`](results/lap2a-overview-inventory.md).
+
 ## Tests
 
 ```bash
@@ -146,7 +172,7 @@ licence's UK-only scope and its exclusion of AI use, is in [`LICENSING.md`](LICE
 ## Layout
 
 ```
-src/hta/        excel.py · normalise.py · spine.py · reconcile.py · cli.py
+src/hta/        excel.py · normalise.py · spine.py · reconcile.py · crawl.py · inventory.py · cli.py
 tests/          unit · surrogate · real-file tiers, plus fixtures/
 data/raw/       cached NICE workbooks (git-ignored, never redistributed)
 data/processed/ the built table (git-ignored, one command away)
