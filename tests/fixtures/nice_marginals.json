@@ -1,0 +1,50 @@
+{
+  "_note": "Structural surrogate of NICE's published recommendations spreadsheet: the marginal counts only, with no NICE free text. Short verbatim categorical values are reusable under the NICE UK Open Content Licence (see LICENSING.md \u00a77); counts are facts. tests/conftest.py rebuilds a 1531-row frame from these so the 87% check runs in CI without the raw file, which is never redistributed.",
+  "source_file": "ta-recommendations_2026-08-19.xlsx",
+  "source_sha256": "04fa1864d0f2e49b3c767e77b6fad1f6f710023f54109cd749913dedac9f377a",
+  "retrieved_at": "2026-08-19",
+  "recommendations": 1531,
+  "appraisals": 1181,
+  "recommendations_per_appraisal": {
+    "1": 1012,
+    "2": 88,
+    "3": 40,
+    "4": 17,
+    "5": 8,
+    "6": 10,
+    "7": 3,
+    "9": 2,
+    "16": 1
+  },
+  "categorisation": {
+    "Recommended": 651,
+    "Optimised": 439,
+    "Terminated Appraisal - non submission": 174,
+    "Not recommended": 137,
+    "Recommended (CDF)": 48,
+    "Not Recommended": 34,
+    "Only in research": 22,
+    "Optimised (CDF)": 13,
+    "Only in Research": 8,
+    "recommended": 2,
+    "Optimised (IMF)": 2,
+    "Recommended (IMF)": 1
+  },
+  "sta_mta_process": {
+    "STA": 988,
+    "MTA": 440,
+    "MTA (review)": 45,
+    "STA (review)": 35,
+    "STA (rapid review)": 16,
+    "MTA (part-review)": 7
+  },
+  "technology_type": {
+    "Pharmaceutical": 1440,
+    "Medical device": 46,
+    "Other therapeutic therapies": 26,
+    "Surgical procedure": 15,
+    "Health promotion activities": 3,
+    "Medical Device": 1
+  },
+  "cancer_recommendations": 662
+}

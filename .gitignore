@@ -1,0 +1,21 @@
+# Raw NICE cache is NEVER redistributed — see LICENSING.md §7.
+# This file predates `git init` on purpose: without it, the first `git add -A`
+# would commit mirrored NICE content and make a licence problem permanent.
+data/raw/
+
+# The built table carries verbatim NICE text (nice_comments_raw is full
+# sentences), and the decision of 19 Aug 2026 is to redistribute no NICE
+# content at all — the artefact is the pipeline, not the corpus. Rebuild it
+# with `python -m hta.cli build`. Derived *statistics* live in results/ and
+# are committed.
+data/processed/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / editor noise
+.DS_Store
+*.env

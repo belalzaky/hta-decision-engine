@@ -1,0 +1,147 @@
+{
+  "sources": {
+    "recommendations": {
+      "file": "ta-recommendations_2026-08-19.xlsx",
+      "sha256": "04fa1864d0f2e49b3c767e77b6fad1f6f710023f54109cd749913dedac9f377a",
+      "retrieved_at": "2026-08-19"
+    },
+    "cancer": {
+      "file": "ta-cancer-recommendations_2026-08-19.xlsx",
+      "sha256": "593564f478e46625467bc6922ff9676d97afedeae70c67a515e9956dce66b7c9",
+      "retrieved_at": "2026-08-19"
+    }
+  },
+  "counts": {
+    "recommendations": 1531,
+    "appraisals": 1181,
+    "appraisal_number_min": 1,
+    "appraisal_number_max": 1181,
+    "appraisal_numbers_gapless": true,
+    "appraisals_with_one_recommendation": 1012,
+    "appraisals_with_multiple_recommendations": 169,
+    "widest_appraisal_recommendations": 16,
+    "recommendations_lost_by_counting_appraisals": 350,
+    "is_cancer": 662,
+    "terminated": 174
+  },
+  "outcome_counts": {
+    "recommended": 653,
+    "optimised": 439,
+    "cdf_recommended": 48,
+    "cdf_optimised": 13,
+    "imf_recommended": 1,
+    "imf_optimised": 2,
+    "only_in_research": 30,
+    "not_recommended": 171,
+    "terminated_non_submission": 174
+  },
+  "raw_category_counts": {
+    "Recommended": 651,
+    "Optimised": 439,
+    "Terminated Appraisal - non submission": 174,
+    "Not recommended": 137,
+    "Recommended (CDF)": 48,
+    "Not Recommended": 34,
+    "Only in research": 22,
+    "Optimised (CDF)": 13,
+    "Only in Research": 8,
+    "recommended": 2,
+    "Optimised (IMF)": 2,
+    "Recommended (IMF)": 1
+  },
+  "process_type_counts": {
+    "STA": 1039,
+    "MTA": 492
+  },
+  "review_type_counts": {
+    "original": 1428,
+    "review": 80,
+    "rapid review": 16,
+    "part-review": 7
+  },
+  "technology_type_raw_counts": {
+    "Pharmaceutical": 1440,
+    "Medical device": 46,
+    "Other therapeutic therapies": 26,
+    "Surgical procedure": 15,
+    "Health promotion activities": 3,
+    "Medical Device": 1
+  },
+  "year_published_raw_range": [
+    "1999/00",
+    "2026/27"
+  ],
+  "positive_shares": {
+    "all": {
+      "label": "all recommendations",
+      "numerator": 1156,
+      "denominator": 1531,
+      "pct": 75.51
+    },
+    "excl_non_submission": {
+      "label": "excluding terminated non-submissions",
+      "numerator": 1156,
+      "denominator": 1357,
+      "pct": 85.19
+    },
+    "nice_denominator": {
+      "label": "excluding non-submissions and only-in-research (NICE's own denominator)",
+      "numerator": 1156,
+      "denominator": 1327,
+      "pct": 87.11
+    }
+  },
+  "nice_published_positive_pct": 87.0,
+  "checks": [
+    {
+      "check": "recommendations = 1531",
+      "pass": true,
+      "value": "1531"
+    },
+    {
+      "check": "appraisals = 1181",
+      "pass": true,
+      "value": "1181"
+    },
+    {
+      "check": "appraisal numbers gapless 1-1181",
+      "pass": true,
+      "value": "1-1181, gapless=True"
+    },
+    {
+      "check": "terminated non-submissions = 174",
+      "pass": true,
+      "value": "174"
+    },
+    {
+      "check": "only-in-research = 30",
+      "pass": true,
+      "value": "30"
+    },
+    {
+      "check": "positive recommendations = 1156",
+      "pass": true,
+      "value": "1156"
+    },
+    {
+      "check": "positive share, all 1531 = 75.51%",
+      "pass": true,
+      "value": "75.51%"
+    },
+    {
+      "check": "positive share, excl 174 non-submissions = 85.19%",
+      "pass": true,
+      "value": "85.19%"
+    },
+    {
+      "check": "positive share, NICE denominator 1327 = 87.11% (matches NICE's published 87%)",
+      "pass": true,
+      "value": "87.11%"
+    },
+    {
+      "check": "is_cancer = 662",
+      "pass": true,
+      "value": "662"
+    }
+  ]
+}
