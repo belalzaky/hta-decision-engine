@@ -8,15 +8,23 @@ logic, but only this one is checked against reality.
 import json
 from pathlib import Path
 
-import pandas as pd
+import pytest
 
 from hta import excel, reconcile
 from hta.spine import build_spine
-from tests.conftest import RAW_CANCER, RAW_RECOMMENDATIONS, needs_raw_cache
 
-pytestmark = needs_raw_cache
-
+# Resolved here rather than imported from conftest: `tests` is not an importable
+# package (no __init__.py, and CI runs bare `pytest`, which does not put the repo
+# root on sys.path), so a cross-test import works locally and breaks in CI.
+REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).parent / "fixtures"
+RAW_RECOMMENDATIONS = REPO_ROOT / "data" / "raw" / "ta-recommendations_2026-08-19.xlsx"
+RAW_CANCER = REPO_ROOT / "data" / "raw" / "ta-cancer-recommendations_2026-08-19.xlsx"
+
+pytestmark = pytest.mark.skipif(
+    not RAW_RECOMMENDATIONS.exists(),
+    reason="raw NICE cache absent (never redistributed — see LICENSING.md)",
+)
 
 
 def _build():

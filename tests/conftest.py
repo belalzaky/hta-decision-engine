@@ -23,13 +23,6 @@ from hta.excel import EXPECTED_COLUMNS, SourceFile
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).parent / "fixtures"
-RAW_RECOMMENDATIONS = REPO_ROOT / "data" / "raw" / "ta-recommendations_2026-08-19.xlsx"
-RAW_CANCER = REPO_ROOT / "data" / "raw" / "ta-cancer-recommendations_2026-08-19.xlsx"
-
-needs_raw_cache = pytest.mark.skipif(
-    not RAW_RECOMMENDATIONS.exists(),
-    reason="raw NICE cache absent (never redistributed — see LICENSING.md)",
-)
 
 
 @pytest.fixture(scope="session")
