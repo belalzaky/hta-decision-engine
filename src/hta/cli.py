@@ -148,6 +148,43 @@ def _crawl_overviews(args) -> int:
     return 0
 
 
+def _crawl_chapters(args) -> int:
+    root = Path(args.cache)
+    overview_manifest = root / MANIFEST_NAME
+    if not overview_manifest.exists():
+        print(f"error: {overview_manifest} not found — run `crawl-overviews` first.",
+              file=sys.stderr)
+        return 2
+
+    slugs = (
+        tuple(s.strip() for s in args.slugs.split(",") if s.strip())
+        if args.slugs else inventory.SUBSTANTIVE_SLUGS
+    )
+    targets = inventory.chapter_targets(
+        _targets_from_spine(Path(args.spine)),
+        crawl_mod.read_manifest(overview_manifest),
+        slugs=slugs,
+    )
+    print(f"{len(targets)} chapters to consider, from cached overviews only "
+          f"(slugs: {', '.join(slugs)})", file=sys.stderr)
+
+    chapter_root = root / "chapters"
+    summary = crawl_mod.crawl(
+        targets,
+        chapter_root,
+        chapter_root / MANIFEST_NAME,
+        delay=args.delay,
+        limit=args.limit,
+        log=lambda m: print(m, file=sys.stderr),
+    )
+    print(
+        f"requested {summary['requested']}, ok {summary['ok']}, "
+        f"failed {summary['failed']}, already cached {summary['skipped']}",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def _inventory(args) -> int:
     root = Path(args.cache)
     manifest_path = root / MANIFEST_NAME
@@ -207,6 +244,18 @@ def main(argv=None) -> int:
     c.add_argument("--limit", type=int, default=None,
                    help="stop after N requests (for a smoke test, not for the real run)")
     c.set_defaults(func=_crawl_overviews)
+
+    ch = sub.add_parser(
+        "crawl-chapters",
+        help="Lap 2b: cache the substantive chapters linked from the cached overviews",
+    )
+    ch.add_argument("--spine", default=str(DEFAULT_PROCESSED / f"{STEM}.parquet"))
+    ch.add_argument("--cache", default=str(DEFAULT_GUIDANCE_CACHE))
+    ch.add_argument("--delay", type=float, default=crawl_mod.DELAY_SECONDS)
+    ch.add_argument("--limit", type=int, default=None)
+    ch.add_argument("--slugs", default=None,
+                    help="comma-separated chapter slugs (default: the substantive set)")
+    ch.set_defaults(func=_crawl_chapters)
 
     i = sub.add_parser(
         "inventory",

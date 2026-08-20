@@ -168,6 +168,46 @@ def _depad(appraisal_id: str) -> str:
     return f"TA{int(appraisal_id[2:])}"
 
 
+#: The chapters that carry the decision and the reasoning behind it. Everything
+#: else on an overview — implementation, committee membership, sources — is
+#: administrative and answers none of Phase 1's questions.
+SUBSTANTIVE_SLUGS = (
+    "Recommendations",
+    "Recommendation",
+    "Committee-discussion",
+    "Consideration-of-the-evidence",
+    "Evidence-and-interpretation",
+    "Advice",
+)
+
+
+BASE_URL = "https://www.nice.org.uk"
+
+
+def chapter_targets(targets, manifest, slugs=SUBSTANTIVE_SLUGS) -> list[tuple[str, str]]:
+    """`(key, url)` for every chapter worth fetching, read from the cached overviews.
+
+    Targets come from the pages already on disk — not from a guessed URL pattern
+    and not from the site. A chapter that NICE does not link from the overview
+    does not exist as far as this crawl is concerned.
+
+    `slugs` is matched after stripping the leading chapter number, so
+    `1-Recommendations` and `4-Recommendations` both match `Recommendations`.
+    """
+    wanted = set(slugs)
+    out: list[tuple[str, str]] = []
+    for appraisal_id, _ in targets:
+        record = manifest.get(appraisal_id)
+        if record is None or not record.ok or not record.path:
+            continue
+        parsed = parse_overview(Path(record.path).read_text(encoding="utf-8", errors="replace"))
+        for chapter in parsed["chapters"]:
+            if re.sub(r"^\d+-", "", chapter["slug"]) not in wanted:
+                continue
+            out.append((f"{appraisal_id}/{chapter['slug']}", BASE_URL + chapter["url"]))
+    return out
+
+
 def _era(appraisal_number: int) -> str:
     if appraisal_number <= 200:
         return "TA1-200"
@@ -239,6 +279,8 @@ def build_report(targets, manifest, root: Path, listing_path: Path | None = None
                          if p["product_type"] == "Technology appraisal")
     advice_pages = sorted(a for a, p in pages.items()
                           if any(c["title"] == "Advice" for c in p["chapters"]))
+    advice_only = sorted(a for a in advice_pages if pages[a]["chapter_count"] == 1)
+    advice_plus = sorted(a for a in advice_pages if pages[a]["chapter_count"] > 1)
 
     route_hits = Counter()
     for p in pages.values():
@@ -286,7 +328,10 @@ def build_report(targets, manifest, root: Path, listing_path: Path | None = None
             "distinct_metadata_shapes": metadata_shapes.most_common(12),
             "product_labels": dict(product_labels),
         },
-        "terminated_signals": _terminated_signals(short_label, advice_pages, terminated_ids),
+        "terminated_signals": _terminated_signals(
+            short_label, advice_pages, terminated_ids,
+            advice_only=advice_only, advice_plus=advice_plus,
+        ),
         "dates": {
             "with_published_date": len(dated),
             "without_published_date": len(pages) - len(dated),
@@ -348,19 +393,6 @@ def build_report(targets, manifest, root: Path, listing_path: Path | None = None
     }
 
 
-#: The chapters that carry the decision and the reasoning behind it. Everything
-#: else on an overview — implementation, committee membership, sources — is
-#: administrative and answers none of Phase 1's questions.
-SUBSTANTIVE_SLUGS = (
-    "Recommendations",
-    "Recommendation",
-    "Committee-discussion",
-    "Consideration-of-the-evidence",
-    "Evidence-and-interpretation",
-    "Advice",
-)
-
-
 def _narrow_target(chapter_slugs: Counter) -> dict:
     """A smaller Lap 2b: the decision and the reasoning, not the housekeeping."""
     picked = {s: chapter_slugs.get(s, 0) for s in SUBSTANTIVE_SLUGS}
@@ -373,7 +405,8 @@ def _narrow_target(chapter_slugs: Counter) -> dict:
     }
 
 
-def _terminated_signals(short_label, advice_pages, terminated_ids) -> dict:
+def _terminated_signals(short_label, advice_pages, terminated_ids,
+                        advice_only=(), advice_plus=()) -> dict:
     """Two page-level signals for the terminated class, scored against the spine.
 
     The overview page does not carry the appraisal *route*, but it does carry
@@ -383,7 +416,12 @@ def _terminated_signals(short_label, advice_pages, terminated_ids) -> dict:
     """
     out = {
         "short_product_label": {"n": len(short_label), "examples": short_label[:5]},
-        "advice_chapter": {"n": len(advice_pages), "examples": advice_pages[:5]},
+        "advice_chapter": {
+            "n": len(advice_pages),
+            "as_only_chapter": len(advice_only),
+            "alongside_other_chapters": sorted(advice_plus),
+            "examples": advice_pages[:5],
+        },
         "scored": terminated_ids is not None,
     }
     if terminated_ids is None:
@@ -436,9 +474,13 @@ def _terminated_prose(t: dict) -> list[str]:
     lines = [
         "### What the page *does* carry: two signals for the terminated class",
         "",
-        "The product label is not always the same string. **170 pages say `Technology appraisal`",
-        "rather than `Technology appraisal guidance`**, and 149 pages carry a single chapter",
-        'titled **"Advice"** instead of a numbered chapter list. Both turn out to mark termination.',
+        f"The product label is not always the same string. **{short['n']} pages say "
+        "`Technology appraisal` rather than `Technology appraisal guidance`**, and "
+        f"**{advice['n']} pages carry a chapter titled \"Advice\"** in place of a numbered chapter "
+        f"list — for {advice['as_only_chapter']} of them it is the only chapter, and "
+        f"{len(advice['alongside_other_chapters'])} "
+        f"(`{', '.join(advice['alongside_other_chapters'])}`) carry it alongside others. Both turn",
+        "out to mark termination.",
         "",
     ]
     if not t.get("scored"):

@@ -405,6 +405,11 @@
     },
     "advice_chapter": {
       "n": 149,
+      "as_only_chapter": 147,
+      "alongside_other_chapters": [
+        "TA149",
+        "TA240"
+      ],
       "examples": [
         "TA1006",
         "TA1024",

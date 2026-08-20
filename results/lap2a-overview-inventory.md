@@ -105,9 +105,8 @@ the committee papers, not here. Lap 2b will show whether the chapters carry it.
 
 ### What the page *does* carry: two signals for the terminated class
 
-The product label is not always the same string. **170 pages say `Technology appraisal`
-rather than `Technology appraisal guidance`**, and 149 pages carry a single chapter
-titled **"Advice"** instead of a numbered chapter list. Both turn out to mark termination.
+The product label is not always the same string. **170 pages say `Technology appraisal` rather than `Technology appraisal guidance`**, and **149 pages carry a chapter titled "Advice"** in place of a numbered chapter list — for 147 of them it is the only chapter, and 2 (`TA149, TA240`) carry it alongside others. Both turn
+out to mark termination.
 
 | Signal | Pages | Precision vs `terminated_flag` | Recall |
 |---|---|---|---|

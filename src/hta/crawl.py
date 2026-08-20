@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -58,9 +59,16 @@ class CrawlAbort(RuntimeError):
 
 @dataclass
 class Fetched:
-    """One cached page, or one recorded failure. Written to the manifest."""
+    """One cached page, or one recorded failure. Written to the manifest.
 
-    appraisal_id: str
+    `key` addresses the thing fetched: an appraisal ID for an overview page
+    (`TA081`), or an appraisal ID and chapter slug for a chapter
+    (`TA081/1-Recommendations`). Lap 2a manifests written before the chapter
+    crawl existed carry `appraisal_id` instead; `read_manifest` accepts both so
+    an existing cache is not invalidated by the rename.
+    """
+
+    key: str
     url_requested: str
     url_final: str
     redirected: bool
@@ -74,6 +82,11 @@ class Fetched:
     @property
     def ok(self) -> bool:
         return self.error is None and self.http_status == 200
+
+    @property
+    def appraisal_id(self) -> str:
+        """The appraisal this page belongs to, chapter or not."""
+        return self.key.split("/", 1)[0]
 
 
 # --------------------------------------------------------------------------
@@ -163,20 +176,37 @@ def cache_path(root: Path, url: str) -> Path:
     return root / f"{slug}.html"
 
 
-def fetch_one(appraisal_id: str, url: str, root: Path, opener=None) -> Fetched:
+def path_for(root: Path, key: str, url: str) -> Path:
+    """Where one fetch lands.
+
+    An overview goes at `<root>/ta81.html`; a chapter goes one level down, at
+    `<root>/ta81/1-Recommendations.html`, so the cache mirrors the URL and a
+    directory listing reads like the site.
+    """
+    if "/" not in key:
+        return cache_path(root, url)
+    parts = [p for p in urlsplit(url).path.split("/") if p]
+    # /guidance/ta81/chapter/1-Recommendations -> directory ta81, matching the
+    # de-padded overview filename rather than the padded spreadsheet ID.
+    directory = parts[1] if len(parts) > 1 else key.split("/", 1)[0].lower()
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", key.split("/", 1)[1])
+    return root / directory / f"{safe}.html"
+
+
+def fetch_one(key: str, url: str, root: Path, opener=None) -> Fetched:
     """Fetch one overview page and write it to the cache, unmodified.
 
     Raises `CrawlAbort` on an empty or implausibly short 200 — that is the
     failure mode worth stopping the whole run for, because it is silent.
     """
-    path = cache_path(root, url)
+    path = path_for(root, key, url)
     try:
         body, status, final_url, _ = _get(url, opener=opener)
     except urllib.error.HTTPError as e:
-        return Fetched(appraisal_id, url, e.url or url, (e.url or url) != url,
+        return Fetched(key, url, e.url or url, (e.url or url) != url,
                        e.code, None, None, None, _now(), f"HTTP {e.code} {e.reason}")
     except Exception as e:  # network-level: DNS, timeout, reset
-        return Fetched(appraisal_id, url, url, False, None, None, None, None,
+        return Fetched(key, url, url, False, None, None, None, None,
                        _now(), f"{type(e).__name__}: {e}")
 
     if len(body) < MIN_BODY_BYTES:
@@ -189,7 +219,7 @@ def fetch_one(appraisal_id: str, url: str, root: Path, opener=None) -> Fetched:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(body)
     return Fetched(
-        appraisal_id=appraisal_id,
+        key=key,
         url_requested=url,
         url_final=final_url,
         redirected=final_url != url,
@@ -210,9 +240,13 @@ def read_manifest(path: Path) -> dict[str, Fetched]:
         return {}
     out = {}
     for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            row = json.loads(line)
-            out[row["appraisal_id"]] = Fetched(**row)
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        # Manifests written before chapters existed key on `appraisal_id`.
+        row.setdefault("key", row.pop("appraisal_id", None))
+        row.pop("appraisal_id", None)
+        out[row["key"]] = Fetched(**row)
     return out
 
 
@@ -225,11 +259,11 @@ def append_manifest(path: Path, record: Fetched) -> None:
 def outstanding(targets: list[tuple[str, str]], manifest: dict[str, Fetched]) -> list:
     """What still needs fetching: never on disk, or on disk but failed."""
     todo = []
-    for appraisal_id, url in targets:
-        seen = manifest.get(appraisal_id)
+    for key, url in targets:
+        seen = manifest.get(key)
         if seen and seen.ok and seen.path and Path(seen.path).exists():
             continue
-        todo.append((appraisal_id, url))
+        todo.append((key, url))
     return todo
 
 
@@ -253,7 +287,7 @@ def crawl(
     todo = outstanding(targets, manifest)
 
     if not todo:
-        log(f"cache complete: {len(targets)} appraisals, 0 network requests")
+        log(f"cache complete: {len(targets)} targets, 0 network requests")
         return {"requested": 0, "ok": 0, "failed": 0, "skipped": len(targets),
                 "robots_checked": False}
 
@@ -263,18 +297,19 @@ def crawl(
     check_robots(fetch_robots(opener=opener))
     log("robots.txt unchanged since Lap 0")
 
+    already_cached = len(targets) - len(todo)
     if limit is not None:
         todo = todo[:limit]
 
-    log(f"{len(todo)} to fetch, {len(targets) - len(todo)} already cached, "
+    log(f"{len(todo)} to fetch, {already_cached} already cached, "
         f"{delay}s apart — about {len(todo) * delay / 60:.0f} minutes")
 
     ok = failed = 0
     consecutive = 0
-    for i, (appraisal_id, url) in enumerate(todo, start=1):
+    for i, (key, url) in enumerate(todo, start=1):
         if i > 1:
             sleep(delay)
-        record = fetch_one(appraisal_id, url, root, opener=opener)
+        record = fetch_one(key, url, root, opener=opener)
         append_manifest(manifest_path, record)
 
         if record.ok:
@@ -283,10 +318,10 @@ def crawl(
         else:
             failed += 1
             consecutive += 1
-            log(f"  FAIL {appraisal_id} {record.error}")
+            log(f"  FAIL {key} {record.error}")
             if consecutive >= MAX_CONSECUTIVE_FAILURES:
                 raise CrawlAbort(
-                    f"{consecutive} consecutive failures ending at {appraisal_id}. "
+                    f"{consecutive} consecutive failures ending at {key}. "
                     "Stopping rather than hammering a site that is refusing us. "
                     "The manifest records everything fetched so far; re-running "
                     "resumes."
@@ -295,4 +330,6 @@ def crawl(
             log(f"  {i}/{len(todo)} ({ok} ok, {failed} failed)")
 
     return {"requested": len(todo), "ok": ok, "failed": failed,
-            "skipped": len(targets) - len(todo), "robots_checked": True}
+            "skipped": already_cached,
+            "deferred_by_limit": len(targets) - already_cached - len(todo),
+            "robots_checked": True}

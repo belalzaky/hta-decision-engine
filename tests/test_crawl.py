@@ -176,6 +176,16 @@ def test_a_full_cache_makes_zero_network_requests_including_robots(tmp_path):
                        "robots_checked": False}
 
 
+def test_a_limited_run_does_not_call_the_rest_cached(tmp_path):
+    """`--limit` defers targets; reporting them as cached would be a lie."""
+    summary = crawl.crawl(targets(5), tmp_path, tmp_path / "m.jsonl", limit=2,
+                          opener=make_opener(pages_for(5)),
+                          sleep=lambda s: None, log=lambda m: None)
+    assert summary["requested"] == 2
+    assert summary["skipped"] == 0
+    assert summary["deferred_by_limit"] == 3
+
+
 def test_a_deleted_cache_file_is_refetched_even_though_the_manifest_has_it(tmp_path):
     crawl.crawl(targets(1), tmp_path, tmp_path / "m.jsonl",
                 opener=make_opener(pages_for(1)), sleep=lambda s: None, log=lambda m: None)
@@ -233,6 +243,37 @@ def test_the_manifest_records_everything_the_dod_asks_for(tmp_path):
     crawl.crawl(targets(1), tmp_path, tmp_path / "m.jsonl",
                 opener=make_opener(pages_for(1)), sleep=lambda s: None, log=lambda m: None)
     row = json.loads((tmp_path / "m.jsonl").read_text().splitlines()[0])
-    assert set(row) >= {"appraisal_id", "path", "retrieved_at", "sha256", "http_status"}
+    assert set(row) >= {"key", "path", "retrieved_at", "sha256", "http_status"}
     assert row["sha256"] == __import__("hashlib").sha256(PAGE).hexdigest()
     assert Path(row["path"]).read_bytes() == PAGE      # cached raw and unmodified
+
+
+def test_a_legacy_manifest_keyed_on_appraisal_id_still_reads(tmp_path):
+    """Lap 2a's manifest predates chapters. Renaming the key must not orphan it."""
+    legacy = {"appraisal_id": "TA081", "url_requested": "u", "url_final": "u",
+              "redirected": False, "http_status": 200, "path": "p", "sha256": "s",
+              "bytes": 10, "retrieved_at": "2026-08-19T00:00:00+00:00", "error": None}
+    (tmp_path / "m.jsonl").write_text(json.dumps(legacy) + "\n")
+    record = crawl.read_manifest(tmp_path / "m.jsonl")["TA081"]
+    assert record.key == "TA081" and record.appraisal_id == "TA081"
+
+
+def test_a_chapter_key_addresses_a_chapter_and_knows_its_appraisal(tmp_path):
+    url = "https://www.nice.org.uk/guidance/ta81/chapter/1-Recommendations"
+    opener = make_opener({url: (PAGE, 200, url)})
+    crawl.crawl([("TA081/1-Recommendations", url)], tmp_path, tmp_path / "m.jsonl",
+                opener=opener, sleep=lambda s: None, log=lambda m: None)
+    record = crawl.read_manifest(tmp_path / "m.jsonl")["TA081/1-Recommendations"]
+    assert record.appraisal_id == "TA081"
+    assert Path(record.path) == tmp_path / "ta81" / "1-Recommendations.html"
+    assert Path(record.path).read_bytes() == PAGE
+
+
+def test_chapters_of_the_same_appraisal_do_not_collide(tmp_path):
+    base = "https://www.nice.org.uk/guidance/ta81/chapter/"
+    urls = {base + s: (PAGE, 200, base + s) for s in ("1-Recommendations", "3-Committee-discussion")}
+    targets = [(f"TA081/{s}", base + s) for s in ("1-Recommendations", "3-Committee-discussion")]
+    crawl.crawl(targets, tmp_path, tmp_path / "m.jsonl", opener=make_opener(urls),
+                sleep=lambda s: None, log=lambda m: None)
+    assert sorted(p.name for p in (tmp_path / "ta81").iterdir()) == [
+        "1-Recommendations.html", "3-Committee-discussion.html"]
