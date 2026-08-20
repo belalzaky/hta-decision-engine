@@ -11,6 +11,7 @@ check drift from what Lap 0 measured. Nothing here touches the network.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -203,6 +204,25 @@ def _inventory(args) -> int:
         terminated_ids=terminated,
     )
     written = inventory.write_reports(report, Path(args.results))
+
+    chapter_manifest = root / "chapters" / MANIFEST_NAME
+    if chapter_manifest.exists():
+        chapter_targets = inventory.chapter_targets(
+            targets, crawl_mod.read_manifest(manifest_path)
+        )
+        chapters = inventory.chapter_cache_report(
+            chapter_targets, crawl_mod.read_manifest(chapter_manifest), chapter_manifest
+        )
+        results = Path(args.results)
+        (results / "lap2b-chapter-cache.json").write_text(
+            json.dumps(chapters, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        (results / "lap2b-chapter-cache.md").write_text(
+            inventory.chapter_report_markdown(chapters), encoding="utf-8")
+        written += [results / "lap2b-chapter-cache.json",
+                    results / "lap2b-chapter-cache.md"]
+        print(f"chapters: {chapters['cached']}/{chapters['targets']} cached, "
+              f"{len(chapters['failed'])} failed", file=sys.stderr)
+
     for path in written:
         print(f"wrote {path}", file=sys.stderr)
     print(inventory.headline(report), file=sys.stderr)

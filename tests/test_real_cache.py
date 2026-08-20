@@ -89,3 +89,90 @@ def test_the_manifest_has_one_row_per_appraisal_and_no_duplicates():
 def test_rerunning_the_crawl_would_make_no_requests(targets, manifest):
     """`crawl.outstanding` is what makes the run resume-safe and idempotent."""
     assert crawl.outstanding(list(targets), manifest) == []
+
+
+# --- Lap 2b: the substantive chapter cache --------------------------------
+
+CHAPTERS = CACHE / "chapters"
+CHAPTER_MANIFEST = CHAPTERS / "manifest.jsonl"
+
+needs_chapters = pytest.mark.skipif(
+    not CHAPTER_MANIFEST.exists(), reason="Lap 2b chapter cache absent"
+)
+
+
+@pytest.fixture(scope="module")
+def chapter_targets(targets, manifest):
+    return inventory.chapter_targets(targets, manifest)
+
+
+@pytest.fixture(scope="module")
+def chapter_manifest():
+    return crawl.read_manifest(CHAPTER_MANIFEST)
+
+
+@needs_chapters
+def test_the_narrow_scope_is_what_was_agreed(chapter_targets):
+    """Recommendations and reasoning; not implementation, membership or sources."""
+    slugs = {t[0].split("/", 1)[1] for t in chapter_targets}
+    stripped = {s.split("-", 1)[1] if s[0].isdigit() else s for s in slugs}
+    assert stripped <= set(inventory.SUBSTANTIVE_SLUGS)
+    assert "Implementation" not in stripped
+    assert not any("committee-members" in s.lower() for s in stripped)
+    assert len(chapter_targets) == 1635
+
+
+@needs_chapters
+def test_every_targeted_chapter_is_cached_with_no_silent_gaps(
+    chapter_targets, chapter_manifest
+):
+    unaccounted = [k for k, _ in chapter_targets if k not in chapter_manifest]
+    assert unaccounted == []
+    failed = [k for k, _ in chapter_targets if not chapter_manifest[k].ok]
+    assert failed == [], f"{len(failed)} chapters still failed: {failed[:5]}"
+
+
+@needs_chapters
+def test_every_cached_chapter_matches_its_recorded_sha(chapter_manifest):
+    for key, record in chapter_manifest.items():
+        if not record.ok:
+            continue
+        path = REPO_ROOT / record.path
+        assert path.exists(), f"{key}: {path} missing"
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == record.sha256
+
+
+@needs_chapters
+def test_a_chapter_belongs_to_the_appraisal_its_key_names(chapter_manifest):
+    """The cache must not silently file TA81's chapter under TA810."""
+    wrong = []
+    for key, record in chapter_manifest.items():
+        if not record.ok:
+            continue
+        expected = f"TA{int(record.appraisal_id[2:])}"
+        parsed = inventory.parse_overview(
+            (REPO_ROOT / record.path).read_text(encoding="utf-8", errors="replace")
+        )
+        if parsed["reference_number"] != expected:
+            wrong.append((key, parsed["reference_number"]))
+    assert wrong == [], f"{len(wrong)} mis-filed: {wrong[:5]}"
+
+
+@needs_chapters
+def test_rerunning_the_chapter_crawl_would_make_no_requests(
+    chapter_targets, chapter_manifest
+):
+    assert crawl.outstanding(list(chapter_targets), chapter_manifest) == []
+
+
+@needs_chapters
+def test_nothing_from_lap_2_leaked_into_the_spine():
+    """Lap 2 caches and inventories. Lap 3 extracts. The schema must not have moved."""
+    from hta.spine import COLUMNS
+
+    spine = pd.read_parquet(SPINE)
+    assert list(spine.columns) == COLUMNS
+    assert "route" not in spine.columns
+    assert "date_published" not in spine.columns
+    assert not any(c.startswith("chapter") for c in spine.columns)
+    assert len(spine) == 1531

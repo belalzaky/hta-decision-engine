@@ -1,0 +1,44 @@
+{
+  "targets": 1635,
+  "cached": 1635,
+  "failed": [],
+  "missing": [],
+  "appraisals_with_a_substantive_chapter": 921,
+  "per_slug_cached": {
+    "Recommendations": 718,
+    "Committee-discussion": 538,
+    "Advice": 149,
+    "Consideration-of-the-evidence": 109,
+    "Evidence-and-interpretation": 70,
+    "Recommendation": 51
+  },
+  "per_slug_targeted": {
+    "Recommendations": 718,
+    "Committee-discussion": 538,
+    "Advice": 149,
+    "Consideration-of-the-evidence": 109,
+    "Evidence-and-interpretation": 70,
+    "Recommendation": 51
+  },
+  "megabytes_on_disk": 64.7,
+  "mean_page_bytes": 39574,
+  "manifest_rows": 1638,
+  "retried_keys": 3,
+  "transient_failures_recovered": [
+    {
+      "key": "TA390/4-Committee-discussion",
+      "error": "IncompleteRead: IncompleteRead(32768 bytes read)"
+    },
+    {
+      "key": "TA413/4-Committee-discussion",
+      "error": "TimeoutError: The read operation timed out"
+    },
+    {
+      "key": "TA651/3-Committee-discussion",
+      "error": "IncompleteRead: IncompleteRead(32768 bytes read)"
+    }
+  ],
+  "active_seconds": 5194,
+  "idle_gaps_excluded": 0,
+  "seconds_per_request": 3.17
+}

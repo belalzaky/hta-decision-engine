@@ -19,6 +19,7 @@ import html as html_mod
 import json
 import re
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 _TIME = re.compile(r'<time[^>]*datetime="(\d{4}-\d{2}-\d{2})"[^>]*>(.*?)</time>', re.S)
@@ -206,6 +207,155 @@ def chapter_targets(targets, manifest, slugs=SUBSTANTIVE_SLUGS) -> list[tuple[st
                 continue
             out.append((f"{appraisal_id}/{chapter['slug']}", BASE_URL + chapter["url"]))
     return out
+
+
+def chapter_cache_report(targets, chapter_manifest, manifest_path: Path) -> dict:
+    """What Lap 2b actually put on disk, and what it cost.
+
+    Reads the manifest and the files it points at. Nothing is parsed out of the
+    chapter bodies — that is Lap 3's job, and doing it here would be exactly the
+    scope creep the brief forbids.
+    """
+    wanted = dict(targets)
+    ok, failed, missing = [], [], []
+    per_slug: Counter = Counter()
+    per_slug_wanted: Counter = Counter()
+    total_bytes = 0
+
+    for key in wanted:
+        per_slug_wanted[re.sub(r"^\d+-", "", key.split("/", 1)[1])] += 1
+        record = chapter_manifest.get(key)
+        if record is None:
+            missing.append({"key": key, "reason": "never attempted"})
+            continue
+        if not record.ok:
+            failed.append({"key": key, "http_status": record.http_status,
+                           "error": record.error})
+            continue
+        if not Path(record.path).exists():
+            missing.append({"key": key,
+                            "reason": f"manifest points at {record.path}, which is absent"})
+            continue
+        ok.append(key)
+        per_slug[re.sub(r"^\d+-", "", key.split("/", 1)[1])] += 1
+        total_bytes += record.bytes or 0
+
+    rows = [json.loads(l) for l in manifest_path.read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    retried = len(rows) - len({r["key"] for r in rows})
+    transient = [
+        {"key": r["key"], "error": r["error"]}
+        for r in rows if r.get("error") and r["key"] in set(ok)
+    ]
+
+    # Wall clock from first to last row would include the idle gaps between a
+    # smoke test, the main run and a retry, and would understate the true rate.
+    # Sum the contiguous stretches instead: a gap over a minute starts a new one.
+    stamps = sorted(datetime.fromisoformat(r["retrieved_at"]) for r in rows)
+    seconds, gaps = 0.0, 0
+    for earlier, later in zip(stamps, stamps[1:]):
+        delta = (later - earlier).total_seconds()
+        if delta > 60:
+            gaps += 1
+            continue
+        seconds += delta
+    seconds = seconds or None
+
+    appraisals = {k.split("/", 1)[0] for k in ok}
+    return {
+        "targets": len(wanted),
+        "cached": len(ok),
+        "failed": failed,
+        "missing": missing,
+        "appraisals_with_a_substantive_chapter": len(appraisals),
+        "per_slug_cached": dict(per_slug.most_common()),
+        "per_slug_targeted": dict(per_slug_wanted.most_common()),
+        "megabytes_on_disk": round(total_bytes / 1_000_000, 1),
+        "mean_page_bytes": round(total_bytes / len(ok)) if ok else 0,
+        "manifest_rows": len(rows),
+        "retried_keys": retried,
+        "transient_failures_recovered": transient,
+        "active_seconds": round(seconds) if seconds else None,
+        "idle_gaps_excluded": gaps,
+        "seconds_per_request": round(seconds / (len(rows) - gaps - 1), 2)
+        if seconds and len(rows) - gaps - 1 > 0 else None,
+    }
+
+
+def chapter_report_markdown(r: dict) -> str:
+    lines = [
+        "# Lap 2b — the substantive chapter cache",
+        "",
+        "Written by `python -m hta.cli inventory`. Targets came from the **cached overview",
+        "pages**, never a guessed URL pattern and never the site. **Nothing is parsed out of the",
+        "chapter bodies here** — Lap 2 caches, Lap 3 extracts.",
+        "",
+        "## Coverage",
+        "",
+        *_table(
+            [["Chapters targeted", r["targets"]],
+             ["Cached", f"**{r['cached']}**"],
+             ["Failed", len(r["failed"])],
+             ["Missing", len(r["missing"])],
+             ["Appraisals with at least one substantive chapter",
+              r["appraisals_with_a_substantive_chapter"]],
+             ["On disk", f"{r['megabytes_on_disk']} MB "
+                         f"(mean {r['mean_page_bytes']:,} bytes per chapter)"]],
+            ["Quantity", "n"]),
+        "",
+        "## By chapter type",
+        "",
+        *_table(
+            [[f"`{slug}`", r["per_slug_targeted"].get(slug, 0), n]
+             for slug, n in r["per_slug_cached"].items()],
+            ["Chapter slug", "Targeted", "Cached"]),
+        "",
+        "## What it cost, measured",
+        "",
+        *_table(
+            [["Requests (manifest rows, retries included)", r["manifest_rows"]],
+             ["Time actually crawling", f"{r['active_seconds']:,} s "
+                                       f"({round((r['active_seconds'] or 0) / 60)} minutes)"],
+             ["Per request", f"**{r['seconds_per_request']} s**"],
+             ["Idle gaps excluded (smoke test, retry)", r["idle_gaps_excluded"]]],
+            ["Quantity", "Value"]),
+        "",
+        "The 2-second delay is a floor; NICE's response time sits on top of it. Lap 2a measured",
+        "2.93 s per request on overview pages, so chapters are marginally slower — they are larger",
+        "(mean "
+        f"{r['mean_page_bytes']:,} bytes against roughly 15,000 for an overview).",
+        "",
+        "## Failures",
+        "",
+    ]
+    if r["failed"] or r["missing"]:
+        lines += _table([[x["key"], x.get("error") or x.get("reason")]
+                         for x in r["failed"] + r["missing"]], ["Key", "Reason"])
+    else:
+        lines.append("**None outstanding.** Every targeted chapter is on disk.")
+    if r["transient_failures_recovered"]:
+        lines += [
+            "",
+            f"**{len(r['transient_failures_recovered'])} transient failures were recovered by "
+            "re-running**, which is the resume path working rather than a clean run:",
+            "",
+            *_table([[x["key"], x["error"]] for x in r["transient_failures_recovered"]],
+                    ["Key", "First attempt"]),
+            "",
+            "All three were network-level — an incomplete read or a read timeout, never an HTTP",
+            "status. Recorded rather than smoothed over: a crawl of this size against a public",
+            "body will drop a connection occasionally, and the design point is that it costs a",
+            "re-run of three requests, not of 1,635.",
+        ]
+    lines += [
+        "",
+        "---",
+        "",
+        "Derived from NICE published data. NICE does not endorse this work. The cache is never",
+        "redistributed — see `LICENSING.md`.",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _era(appraisal_number: int) -> str:
